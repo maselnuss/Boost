@@ -4,10 +4,15 @@ Boost is an independently maintained variant of [AAPS](https://github.com/nights
 4.0.0 that adds the Boost APS plugin. It is not a release of, or supported by, the AAPS project.
 You build it yourself and you are responsible for how you use it. AGPL-3.0, as AAPS.
 
-This line is Boost 6.3.0: the V6 meal logic and the Boost high temp, with each SMB sized by the
+This line is Boost 6.3.1: the V6 meal logic and the Boost high temp, with each SMB sized by the
 Boost tiers as in Boost 6.2.0 for AAPS 3.4.2.6.
 
-> This is the `boost-endurance-4.0.0` branch, Boost 6.3.0.E. It is the Boost 6.3.0 release with
+6.3.1 corrects the night mode BG offset. 6.3.0 read its 27 mg/dL default as 27 mmol/L, so the
+setting showed 27.0 mmol/L and reverted when changed, and with night mode on SMBs were off all
+night. The offset you set now applies, as on 3.4, and a value saved under 6.3.0 is read back as
+entered. Otherwise 6.3.1 doses as 6.3.0.
+
+> This is the `boost-endurance-4.0.0` branch, Boost 6.3.1.E. It is the Boost 6.3.1 release with
 > changes for long, low-step endurance exercise such as cycling, rowing or paddling, all live and all
 > able only to reduce insulin, ported from the `Boost-endurance` line on AAPS 3.4. Compared with the
 > release, it adds an Endurance activity state that holds a ride together as one bout and reduces
@@ -15,7 +20,7 @@ Boost tiers as in Boost 6.2.0 for AAPS 3.4.2.6.
 > bout up to 12 hours, and applies that recovery after an endurance bout even when Post-Exercise
 > Recovery is switched off. It needs heart-rate integration. Nothing else differs from the release.
 > The details are in [Boost-endurance](docs/boost-endurance.md). To build it with Boost CI, select
-> the release `4.0.0-boost-6.3.0.E`.
+> the release `4.0.0-boost-6.3.1.E`.
 
 ## Dosing changes from Boost 6.2.0
 
