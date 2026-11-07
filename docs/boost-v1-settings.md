@@ -612,9 +612,9 @@ Enhanced oref1 only fires when deltas are increasing above a rate of 0.5%. This 
 
 The **Boost and Boost V2** settings share the following configuration. Note that the default settings are designed to disable most of the functions, and you will need to adjust them.
 
-For a detailed walkthrough of how each setting affects dosing across the Boost tier system, see the **[Boost Tuning Guide](https://tim2000s.github.io/Boost-in-AAPS_3.4/boost_tuning_guide.html)**. The guide explains the relationship between settings with scenario-based examples.
+For a detailed walkthrough of how each setting affects dosing across the Boost tier system, see the **[Boost Tuning Guide](https://tim2000s.github.io/Boost/boost_tuning_guide.html)**. The guide explains the relationship between settings with scenario-based examples.
 
-To experiment with settings before applying them to your loop, use the **[Boost Simulator](https://tim2000s.github.io/Boost-in-AAPS_3.4/boost_simulator.html)**. The simulator models the full 8-tier decision tree and shows how each tier responds to your BG, delta, and IOB inputs. It can also connect to your Nightscout instance to replay real data.
+To experiment with settings before applying them to your loop, use the **[Boost Simulator](https://tim2000s.github.io/Boost/boost_simulator.html)**. The simulator models the full 8-tier decision tree and shows how each tier responds to your BG, delta, and IOB inputs. It can also connect to your Nightscout instance to replay real data.
 
 ### Settings screen layout
 
