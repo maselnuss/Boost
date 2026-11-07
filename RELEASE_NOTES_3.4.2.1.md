@@ -52,7 +52,7 @@ The pump reservoir level in the Boost Overview now changes colour at warning/cri
 ## Documentation
 
 ### Simulator & Tuning Guide Links
-Links to the [Boost Tuning Guide](https://tim2000s.github.io/Boost-in-AAPS_3.4/boost_tuning_guide.html) and [Boost Simulator](https://tim2000s.github.io/Boost-in-AAPS_3.4/boost_simulator.html) are added to the README header and Settings section.
+Links to the [Boost Tuning Guide](https://tim2000s.github.io/Boost/boost_tuning_guide.html) and [Boost Simulator](https://tim2000s.github.io/Boost/boost_simulator.html) are added to the README header and Settings section.
 
 ### Simulator Updates
 The simulator now models graduated fast-carb protection (BG-proportional scaling) and the spike override cap.

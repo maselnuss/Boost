@@ -11,6 +11,9 @@
 //                   the one that found the display grid being off-centre.
 //   regress.js      drives the current file and the previous commit's over the same inputs and
 //                   requires identical results in mg/dL, since most readers never touch the toggle.
+//                   The current file is pinned to Boost 6.2.0, so this also shows 6.2.0 unchanged.
+//   version_test.js jsdom. Each Boost 6.3.0 rule moves its result on a hand-built input in 6.3.0
+//                   mode and not in 6.2.0 mode.
 //
 // Chrome is skipped with a warning if it is not installed, rather than failing the run.
 const { execFileSync, spawnSync } = require('child_process');
@@ -40,7 +43,12 @@ run('units_test (jsdom)', () => {
     { encoding: 'utf8' }));
 });
 
-run('regress (mg/dL unchanged from HEAD)', () => {
+run('version_test (6.3.0 rules, jsdom)', () => {
+  process.stdout.write(execFileSync('node', [path.join(HERE, 'version_test.js'), SIM],
+    { encoding: 'utf8' }));
+});
+
+run('regress (6.2.0 mode, mg/dL unchanged from HEAD)', () => {
   const orig = path.join(os.tmpdir(), 'boost_simulator_head.html');
   fs.writeFileSync(orig, execFileSync('git', ['-C', ROOT, 'show', 'HEAD:boost_simulator.html'],
     { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }));

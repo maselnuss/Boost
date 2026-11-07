@@ -64,7 +64,7 @@ engine that produced them.
 Prefer to watch before you switch? You still can. Selecting the "Boost" plugin (instead of
 "Boost V6") runs the same engine with the V6 layer in shadow — it logs what it *would* dose to
 Nightscout without driving your pump — and the
-[Analyser](https://tim2000s.github.io/Boost-in-AAPS_3.4/boost_analyser.html) compares V1 vs V6 on
+[Analyser](https://tim2000s.github.io/Boost/boost_analyser.html) compares V1 vs V6 on
 your own data. That is optional now, not a required warm-up.
 
 | APS plugin you select | What drives your pump |
@@ -101,7 +101,7 @@ will see on those screens — so you can match documentation to settings without
 
 **How to use them:** start from the auto-config values, change one at a time, and check the
 caps and Max IOB first — if a cap or the IOB clamp is what's binding, more Aggression changes
-nothing. The [Tuning Guide](https://tim2000s.github.io/Boost-in-AAPS_3.4/boost_tuning_guide.html)
+nothing. The [Tuning Guide](https://tim2000s.github.io/Boost/boost_tuning_guide.html)
 shows each dial on a conservative→aggressive spectrum with worked scenarios.
 
 ### Two dose caps you will see referenced
@@ -223,14 +223,14 @@ delivering nothing.
 Three self-contained HTML tools — no install, no data leaves your machine. A good order for a
 newcomer is Tuning Guide → Simulator → Analyser:
 
-- **[▶ Tuning Guide](https://tim2000s.github.io/Boost-in-AAPS_3.4/boost_tuning_guide.html)**
+- **[▶ Tuning Guide](https://tim2000s.github.io/Boost/boost_tuning_guide.html)**
   ([source](boost_tuning_guide.html)) — *learn what each setting does.* Every knob on a
   conservative→aggressive spectrum, with real-world tuning scenarios, for both V1 and V6.
-- **[▶ Simulator](https://tim2000s.github.io/Boost-in-AAPS_3.4/boost_simulator.html)**
+- **[▶ Simulator](https://tim2000s.github.io/Boost/boost_simulator.html)**
   ([source](boost_simulator.html)) — *play with the dosing maths.* Set BG, trend, IOB, TDD and the
   settings (or pull a snapshot from Nightscout) and watch the ISF and SMB recompute, live, for both
   the V1 tier ladder and the V6 state machine.
-- **[▶ Analyser](https://tim2000s.github.io/Boost-in-AAPS_3.4/boost_analyser.html)**
+- **[▶ Analyser](https://tim2000s.github.io/Boost/boost_analyser.html)**
   ([source](boost_analyser.html)) — *V1 vs V6 on your own data.* Enter your Nightscout URL + a
   read token and it reads the shadow telemetry every Boost build logs, for a real paired comparison.
   Runs entirely in your browser; the token goes only to your Nightscout.

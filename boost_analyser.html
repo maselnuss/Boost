@@ -190,6 +190,11 @@
         <li>Cycles are deduplicated to 5-minute buckets (AAPS re-invokes more often during SMB delivery).</li>
         <li>On V6-active builds, V1's dose is parsed from the reason text (<code>base would=…</code>); cycles where
         that isn't present are counted as unpaired and excluded from dose deltas.</li>
+        <li>Boost 6.3.0 on AAPS 4.0 has one Boost plugin, and V6 drives every cycle. The version is read from
+        <code>suggested.boostVersion</code> on 4.0 and from <code>configuration.apsConfiguration</code> on 3.4.
+        V6 does not override a cycle on which V1 suspended for a low (<code>lowSuspend=1</code>), so those cycles
+        pair with both engines at V1's dose. From 6.3.0 the committed cap also holds RECOVERING, and the
+        committed cap hint counts those cycles when the data names 6.3.0 or later.</li>
         <li>If your build predates the shadow telemetry (~May 2026), no <code>boostV5_*</code> fields exist and this
         page can't compare — update Boost first.</li>
         <li><b>Trio sites</b> are auto-detected per dataset: structured <code>boostV5_*</code> fields → AAPS; the
@@ -354,6 +359,10 @@ function parseCycles(dsList) {
       floorWouldAdd: numOrNull(sug.boostV5_floorWouldAdd),
       confirmGate: sug.boostV5_confirmGate || null,
       primer: parsePrimer(reason),
+      // AAPS 4.0 dropped the devicestatus configuration block, so 6.3.0 writes the version on
+      // suggested.boostVersion. On 3.4 it rides on configuration.apsConfiguration (every 12th record).
+      ver: sug.boostVersion || (d.configuration && d.configuration.apsConfiguration &&
+        d.configuration.apsConfiguration.boostVersion) || null,
       reason
     });
   }
@@ -377,6 +386,15 @@ function parseCycles(dsList) {
   return ded;
 }
 
+// Boost version on the newest record that names one, e.g. "6.3.0+dev.c8ce6355d0". at63 is true for
+// 6.3.0 or later, false for earlier, null when no record names a version.
+function boostVersionOf(cycles) {
+  const c = cycles.filter(x => x.ver).pop();
+  if (!c) return { ver: null, at63: null };
+  const m = String(c.ver).match(/^(\d+)\.(\d+)/);
+  return { ver: c.ver, at63: m ? (+m[1] > 6 || (+m[1] === 6 && +m[2] >= 3)) : null };
+}
+
 function numOrNull(v) { return (typeof v === "number" && isFinite(v)) ? v : null; }
 
 // Pair each cycle into {v1, v6}. Returns null for unpaired.
@@ -397,6 +415,8 @@ function pairDoses(c) {
   // V6-active build: V1 comes from the reason text
   const m = c.reason.match(/base would=([\d.]+)\s*U/);
   if (m) return { v1: parseFloat(m[1]), v6 };
+  // 6.3.0: V6 never overrides a V1 low suspend, so both engines' dose is V1's (no SMB).
+  if (/lowSuspend=1/.test(c.reason)) return { v1: c.units || 0, v6: c.units || 0 };
   // suppression branches: units delivered were V1's base dose
   if (/V6 (suppressed|override skipped)/.test(c.reason) && c.units !== null)
     return { v1: c.units, v6 };
@@ -513,11 +533,12 @@ function analyse(cycles, entries, episodes) {
       commitCap: conf ? conf.fcap : null
     };
   });
+  const bv = boostVersionOf(cycles);
   const days = cycles.length ? (cycles[cycles.length - 1].ts - cycles[0].ts) / 86400000 : 0;
   const activeMode = (cycles.filter(c=>c.active).length) > cycles.length/2;
   const cfDeltas = counterfactualDeltas(cycles);
   const nearMiss = nearMissAnalysis(cycles, entries, cfDeltas, labels);
-  const modelStub = { episodes: eps, nearMiss, night: mk(night), gly };
+  const modelStub = { episodes: eps, nearMiss, night: mk(night), gly, at63: bv.at63 };
   const hints = leverHints(modelStub, cycles, activeMode, labels);
   const cfSeries = counterfactualSeries(entries, cycles);
   // Acceleration primer. Counted separately from the paired dose comparison, because the primer is
@@ -536,6 +557,7 @@ function analyse(cycles, entries, episodes) {
   };
   return {
     primer: primerSummary,
+    boostVersion: bv.ver, at63: bv.at63,
     siteMode, sources, labels, segments: sourceSegments(cycles),
     cfN: cfDeltas.length,
     nearMiss,
@@ -696,14 +718,16 @@ function leverHints(model, cycles, activeMode, labels) {
       hints.push({ lever: "Confirmed cap (U)", dir: "consider a modest raise",
         why: `${clipped.length} commit-shots were clipped at the cap (now ${fc.fcap}U) on episodes that still peaked ≥200.` });
   }
-  // 3. committed cap binding while still rising high (same per-cycle rule as 2)
+  // 3. committed cap binding while still rising high (same per-cycle rule as 2). From 6.3.0 the
+  //    committed cap also holds RECOVERING, so those cycles count only when the data says 6.3.0+.
   const cc = cycles.filter(c => c.ccap !== null).pop();
   if (cc) {
-    const pinned = cycles.filter(c => c.state === "COMMITTED" && c.fd !== null && c.ccap !== null && c.ccap >= cc.ccap &&
+    const capped = s => s === "COMMITTED" || (model.at63 === true && s === "RECOVERING");
+    const pinned = cycles.filter(c => capped(c.state) && c.fd !== null && c.ccap !== null && c.ccap >= cc.ccap &&
       c.fd >= 0.95 * c.ccap && (c.bg || 0) > 180);
     if (pinned.length >= 4)
       hints.push({ lever: "Committed cap (U)", dir: "consider a modest raise",
-        why: `${pinned.length} COMMITTED holding cycles were pinned at the cap (now ${cc.ccap}U) while BG was above 180.` });
+        why: `${pinned.length} ${model.at63 === true ? "COMMITTED or RECOVERING" : "COMMITTED holding"} cycles were pinned at the cap (now ${cc.ccap}U) while BG was above 180.` });
   }
   // 4. events where V6's dosing was the low-side pressure → gentler V6 (v6ExtraU is the
   //    absorbed V6-minus-V1 insulin before the nadir, computed per-cycle — mode-independent)
@@ -1079,8 +1103,10 @@ function render(model, entries) {
       Segments: ${segs}${(model.segments || []).length > 6 ? " · …" : ""}.`;
   } else if (model.siteMode === "aaps") {
     mb.style.display = "block";
-    mb.innerHTML = `<b>Detected: AAPS Boost build</b> — V1 acting, Boost V6 shadow
-      (structured <code>boostV5_*</code> telemetry).`;
+    // 6.3.0 has one Boost plugin and V6 always drives, so the acting engine follows the data.
+    mb.innerHTML = `<b>Detected: AAPS Boost build${model.boostVersion ? " " + String(model.boostVersion).replace(/[<>&"]/g, "") : ""}</b>: ` +
+      (model.activeShare > 0.5 ? "Boost V6 acting, V1 read from the reason text" : "V1 acting, Boost V6 shadow") +
+      ` (structured <code>boostV5_*</code> telemetry).`;
   } else { mb.style.display = "none"; }
   // Relabel the static series text on Trio/mixed sites (AAPS keeps the original wording untouched)
   if (isTrio || isMixed) {

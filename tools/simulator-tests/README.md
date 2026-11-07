@@ -32,7 +32,12 @@ a converted bound is not a round number and the grid is counted from the minimum
 `regress.js` drives the working copy and `HEAD` over the same inputs and requires identical results
 in mg/dL. Most readers never touch the toggle and should see no change at all.
 
-Chrome is skipped with a warning if it is not installed. The other two always run.
+`version_test.js` checks the Boost 6.3.0 (AAPS 4.0.0) rules. Each is run on a hand-built input in
+both versions, and must change the result in the direction the 6.3.0 Kotlin gives in 6.3.0 mode
+only. `regress.js` pins the working copy to 6.2.0 (AAPS 3.4.2.6) and compares the V6 decision as
+well as `calcAll`, so it also shows that the 6.2.0 results did not move.
+
+Chrome is skipped with a warning if it is not installed. The others always run.
 
 ## What is deliberately not converted
 

@@ -495,6 +495,20 @@ canvas {
 <!-- ════════════════════════════════════════════════════════ -->
 <div class="sidebar">
 
+  <!-- Boost version -->
+  <div class="section">
+    <div class="section-body">
+      <div class="ctrl">
+        <div class="ctrl-label" style="margin-bottom:6px"><span class="ctrl-name">Boost version</span></div>
+        <select id="s-simVersion" onchange="update()" style="width:100%; padding:7px 9px; background:#0f1117; color:#e2e8f0; border:1px solid #334155; border-radius:7px; font-size:0.82rem;">
+          <option value="6.3.0" selected>Boost 6.3.0 (AAPS 4.0.0)</option>
+          <option value="6.2.0">Boost 6.2.0 (AAPS 3.4.2.6)</option>
+        </select>
+        <div class="ctrl-hints"><span>dosing rules follow the chosen release</span></div>
+      </div>
+    </div>
+  </div>
+
   <!-- Patient / insulin -->
   <div class="section">
     <div class="section-header" onclick="toggleSection(this)">
@@ -649,11 +663,13 @@ canvas {
         <div class="ctrl-label"><span class="ctrl-name">maxSMBBasalMinutes</span><span class="ctrl-val" id="v-smbMin">30 min</span></div>
         <input type="range" id="s-smbMin" min="15" max="120" step="5" value="30" oninput="update()">
         <div class="ctrl-hints"><span>15 min (IOB ≤ -0.2)</span><span>120 min</span></div>
+        <div class="ctrl-hints v63-note" id="note-smbMin" style="display:none"><span>Boost 6.3.0 holds this at no more than 15 min. A higher value is lowered.</span></div>
       </div>
       <div class="ctrl">
         <div class="ctrl-label"><span class="ctrl-name">maxUAMSMBBasalMinutes</span><span class="ctrl-val" id="v-uamSmbMin">15 min</span></div>
         <input type="range" id="s-uamSmbMin" min="15" max="120" step="5" value="15" oninput="update()">
         <div class="ctrl-hints"><span>15 min (IOB &gt; -0.2)</span><span>120 min</span></div>
+        <div class="ctrl-hints v63-note" id="note-uamSmbMin" style="display:none"><span>Boost 6.3.0 holds this at no more than 20 min. A higher value is lowered.</span></div>
       </div>
       <div class="toggle-row" style="margin-top:4px">
         <span class="toggle-label">Enable Percent Scaling</span>
@@ -663,6 +679,7 @@ canvas {
         <div class="ctrl-label"><span class="ctrl-name">Percent Scale Factor</span><span class="ctrl-val" id="v-percentScale">200%</span></div>
         <input type="range" id="s-percentScale" min="50" max="500" step="10" value="200" oninput="update()">
         <div class="ctrl-hints"><span>50%</span><span>500% (BG 108–180 amplifier)</span></div>
+        <div class="ctrl-hints v63-note" id="note-percentScale" style="display:none"><span>Boost 6.3.0 has no setting for this. Percent scale is on at 200%, so the simulator uses that.</span></div>
       </div>
     </div>
   </div>
@@ -705,9 +722,10 @@ canvas {
         <div class="ctrl-hints"><span>0 U</span><span>2.5 U — per-cycle COMMITTED hold cap</span></div>
       </div>
       <div class="ctrl">
-        <div class="ctrl-label"><span class="ctrl-name">Acceleration primer base</span><span class="ctrl-val" id="v-primerCapU">0.00 U</span></div>
+        <div class="ctrl-label"><span class="ctrl-name">Early primer ceiling</span><span class="ctrl-val" id="v-primerCapU">0.00 U</span></div>
         <input type="range" id="s-primerCapU" min="0" max="1" step="0.05" value="0" oninput="update()">
         <div class="ctrl-hints"><span>0 U (off)</span><span>1.0 U — ApsBoostV5PrimerCapU, auto-config derived</span></div>
+        <div class="ctrl-hints" id="note-primerCapU"><span></span></div>
       </div>
       <div class="toggle-row" style="margin-top:4px">
         <span class="toggle-label">Primer already used this meal session</span>
@@ -1175,6 +1193,8 @@ function deltaUnit()     { return currentUnit === 'mmol' ? 'mmol/5m' : 'mg/dL/5m
 function isfUnitLabel()  { return currentUnit === 'mmol' ? 'mmol/L per U' : 'mg/dL per U'; }
 function isfShortUnit()  { return currentUnit === 'mmol' ? 'mmol/U' : 'mg/U'; }
 
+// A rate threshold in the display unit, for explanatory text: "3 mg/dL/5m" or "0.17 mmol/5m".
+function rateText(mgdlPer5m) { return `${toDisplay(mgdlPer5m).toFixed(currentUnit === 'mmol' ? 2 : 0)} ${deltaUnit()}`; }
 function fmtBG(mgdl, dp) {
   if (mgdl == null || isNaN(mgdl)) return '—';
   return toDisplay(mgdl).toFixed(dp != null ? dp : (currentUnit === 'mmol' ? 1 : 0));
@@ -1382,6 +1402,8 @@ const V6 = {
   RECOVER_DECEL: -5.0, RECOVER_IDLE_SCORE: 0.18,
   RECOVER_REENGAGE_ACCL: 10.0, RECOVER_REENGAGE_DELTA: 3.0,
   RECOVER_REENGAGE_OFFSET: 20.0, RECOVER_REENGAGE_MIN_AGE: 1,
+  // 6.3.0 only (MealHypothesis.kt RECOVERING_ENTRY_MAX_DELTA / RECOVERING_REENGAGE_RISE_DELTA)
+  RECOVER_ENTRY_MAX_DELTA: 3.0, RECOVER_REENGAGE_RISE_DELTA: 8.0,
   // fast-carb fast-path (2026-06-16) + post-hypo rescue guard (2026-07-02)
   // 2026-07-03 retune: Δ 8→6, accl 15→10, score 0.60→0.65 (replay sweep: +21 meals ~9 min earlier, false fires 39%→32%)
   FC_DELTA: 6.0, FC_ACCL: 10.0, FC_SCORE: 0.65, FC_MIN_RECENT_LOW: 80.0,
@@ -1400,11 +1422,14 @@ const V6 = {
   // caps are the user prefs DoubleKey.ApsBoostV5ConfirmedCapU (default 2.5, 0–7.5) and
   // ApsBoostV5CommittedCapU (default 0.5, 0–2.5) — surfaced as sliders in this simulator.
   DEFAULT_CAP_CONFIRMED: 1.0, DEFAULT_CAP_COMMITTED: 0.25,
-  // 2026-07-20 V1-acceleration early primer (DetermineBasalBoostV5 PRIMER_* constants).
-  PRIMER_ACCEL_THRESHOLD: 10.0,      // delta acceleration above which the primer may fire
+  // Early primer (DetermineBasalBoostV5 PRIMER_* constants, sizing as reworked 2026-07-30).
+  PRIMER_ACCEL_THRESHOLD: 10.0,      // 6.2.0 trigger: deltaAccl above this
+  PRIMER_RISE_SHORT_AVG_MIN: 3.0,    // 6.3.0 trigger: shortAvgDelta at or above this
   PRIMER_MIN_RECENT_LOW_MGDL: 80.0,  // no low below this in the recent window
-  PRIMER_MAX_MULT: 2.0,              // ceiling on the acceleration scaling, as a multiple of base
-  PRIMER_ACCEL_SCALE_DENOM: 20.0,    // scale = 1 + (accel - threshold) / this
+  PRIMER_DELTA_MIN: 3.0,             // delta floor for the gate
+  PRIMER_DELTA_RAMP_LO: 1.5, PRIMER_DELTA_FULL: 8.0,   // fRise ramp
+  PRIMER_BG_LO: 90.0, PRIMER_BG_LO_SPAN: 20.0,         // fBg lower shoulder
+  PRIMER_BG_CEIL: 220.0, PRIMER_BG_FADE: 40.0,         // fBg upper fade
   // ── SafetyGates.kt ──
   IOB_T0: 0.50, IOB_T1: 0.70, IOB_T2: 0.85,
   IOB_S1: 0.85, IOB_S2: 0.60, IOB_S3: 0.40,
@@ -1511,16 +1536,19 @@ function v6MealStep(st, m) {
       // CONFIRMED_TO_COMMITTED_AGE = 0 → true single-cycle commit (Fix 6)
       return { state:'COMMITTED', age:0, maxScore:0, maxOffset:0, committed:true };
     case 'COMMITTED': {
-      // BOTH required: delta_accl < −5 AND delta strictly declining over 2 cycles
-      const backOff = m.deltaAccl < V6.RECOVER_DECEL && m.deltaDeclining;
+      // BOTH required: delta_accl < −5 AND delta strictly declining over 2 cycles.
+      // 6.3.0 also needs delta below 3, so a rise that only slows stays COMMITTED.
+      const backOff = m.deltaAccl < V6.RECOVER_DECEL && m.deltaDeclining
+        && (!m.v63 || m.delta < V6.RECOVER_ENTRY_MAX_DELTA);
       if (backOff) return { state:'RECOVERING', age:0, maxScore:0, maxOffset:0, committed:true };
       return { state:'COMMITTED', age:st.age + 1, maxScore:0, maxOffset:0, committed:true };
     }
     case 'RECOVERING': {
+      // 6.3.0 also re-engages on a fast rise (delta > 8) without acceleration.
       const reEngage = st.age >= V6.RECOVER_REENGAGE_MIN_AGE
-        && m.deltaAccl > V6.RECOVER_REENGAGE_ACCL
-        && m.delta > V6.RECOVER_REENGAGE_DELTA
-        && offset > V6.RECOVER_REENGAGE_OFFSET;
+        && offset > V6.RECOVER_REENGAGE_OFFSET
+        && ((m.deltaAccl > V6.RECOVER_REENGAGE_ACCL && m.delta > V6.RECOVER_REENGAGE_DELTA)
+          || (m.v63 && m.delta > V6.RECOVER_REENGAGE_RISE_DELTA));
       if (reEngage) return { state:'COMMITTED', age:0, maxScore:0, maxOffset:0, committed:true };
       if (m.delta < 0 || score < V6.RECOVER_IDLE_SCORE)
         return { state:'IDLE', age:0, maxScore:0, maxOffset:0, committed:false };
@@ -1544,7 +1572,9 @@ function v6Budget(baseInsulinReq, mlHypoRisk, inPostEx, knobs) {
   const postEx   = inPostEx ? V6.POST_EX_SCALE : 1.0;
   const sens     = Math.max(0.8, Math.min(1.2, knobs.sensitivity));
   const modified = baseInsulinReq * mlScale * postEx * sens;
-  return { budget: Math.max(V6.BUDGET_FLOOR * baseInsulinReq, modified), mlScale, postEx, sens };
+  // 6.3.0 divides the floor by Hypo Caution (AggressionBudget.kt floorBudget).
+  const floorFrac = knobs.v63 ? V6.BUDGET_FLOOR / Math.max(1.0, knobs.hypoCaution) : V6.BUDGET_FLOOR;
+  return { budget: Math.max(floorFrac * baseInsulinReq, modified), mlScale, postEx, sens, floorFrac };
 }
 
 // Phase 2 — action multiplier (aggression knob scales only CONFIRMED)
@@ -1562,9 +1592,10 @@ function v6VelocityFactor(cumRise30) {
 }
 // State-specific dose caps. Runtime caps come from the user prefs / sliders
 // (confirmedCapU default 2.5, committedCapU default 0.5) — NOT the Kotlin constant defaults.
-function v6StateCap(state, dose, confirmedCapU, committedCapU) {
+// 6.3.0 caps RECOVERING at the committed cap as well.
+function v6StateCap(state, dose, confirmedCapU, committedCapU, v63) {
   if (state === 'CONFIRMED') return Math.min(dose, confirmedCapU);
-  if (state === 'COMMITTED') return Math.min(dose, committedCapU);
+  if (state === 'COMMITTED' || (v63 && state === 'RECOVERING')) return Math.min(dose, committedCapU);
   return dose;
 }
 
@@ -1639,15 +1670,14 @@ function v6Decide(baseInsulinReq, m, prevState, knobs) {
   const actionMult = v6ActionMult(st, knobs.aggression);
   const rawDose = bud.budget * actionMult;
   const velScaled = rawDose * velFactor;
-  const capped = v6StateCap(st, velScaled, confirmedCap, committedCap);
+  const capped = v6StateCap(st, velScaled, confirmedCap, committedCap, knobs.v63);
   const stateCapped = capped < velScaled - 1e-9;
   const gated = v6Gates(capped, m);
-  // ===== 2026-07-20 V1-acceleration early primer =====
-  // Mirrors DetermineBasalBoostV5: computed once the state is known, applied AFTER the dose is
-  // finalised, and clamped to the remaining IOB headroom. Fires once per meal session, so the
-  // simulator exposes "already primed this session" rather than pretending to hold session state.
-  // The base is additive; the velocity-scaled excess above it is netted off the CONFIRMED
-  // commit-shot, which is why a primer here does not simply raise the total.
+  // ===== Early primer (DetermineBasalBoostV5.primerSizing) =====
+  // Computed once the state is known and applied after the dose is finalised. Fires once per meal
+  // session, so the simulator exposes "already primed this session" rather than holding session
+  // state. primerCapU is a ceiling, scaled down by rise, BG, IOB headroom and the ML hypo damper.
+  // The netting of primer insulin off a later commit-shot is not modelled.
   const primerCap = knobs.primerCapU || 0;
   let primerBolusU = 0, primerReason = null;
   if (primerCap <= 0) {
@@ -1656,10 +1686,14 @@ function v6Decide(baseInsulinReq, m, prevState, knobs) {
     primerReason = `state ${st} (primer fires in OBSERVING only)`;
   } else if (m.primerAlreadyApplied) {
     primerReason = 'already primed this session';
-  } else if (!(m.deltaAccl > V6.PRIMER_ACCEL_THRESHOLD)) {
+  } else if (knobs.v63 && newState.committed) {
+    primerReason = 'a meal was already committed this session';
+  } else if (!(m.delta >= V6.PRIMER_DELTA_MIN)) {
+    primerReason = `delta ${m.delta.toFixed(1)} below ${V6.PRIMER_DELTA_MIN}`;
+  } else if (knobs.v63 && !(m.shortAvgDelta >= V6.PRIMER_RISE_SHORT_AVG_MIN)) {
+    primerReason = `short avg delta ${m.shortAvgDelta.toFixed(1)} below ${V6.PRIMER_RISE_SHORT_AVG_MIN}`;
+  } else if (!knobs.v63 && !(m.deltaAccl > V6.PRIMER_ACCEL_THRESHOLD)) {
     primerReason = `accel ${m.deltaAccl.toFixed(1)} ≤ ${V6.PRIMER_ACCEL_THRESHOLD}`;
-  } else if (!(m.delta > 0)) {
-    primerReason = 'delta not positive';
   } else if (m.recentLowBg < V6.PRIMER_MIN_RECENT_LOW_MGDL) {
     primerReason = `recent low ${Math.round(m.recentLowBg)} < ${V6.PRIMER_MIN_RECENT_LOW_MGDL}`;
   } else if (m.asleep) {
@@ -1668,19 +1702,26 @@ function v6Decide(baseInsulinReq, m, prevState, knobs) {
     primerReason = 'exercising';
   } else if (m.recentLowBg < 75) {
     primerReason = 'post-rescue window';
+  } else if (gated.hard) {
+    primerReason = 'a hard gate fired';
   } else {
-    const scale = 1 + Math.max(0, (m.deltaAccl - V6.PRIMER_ACCEL_THRESHOLD) / V6.PRIMER_ACCEL_SCALE_DENOM);
-    const target = Math.min(primerCap * scale, V6.PRIMER_MAX_MULT * primerCap);
-    let amt = Math.min(target, Math.max(0, m.maxIob - m.iob - gated.dose));
+    const fRise = clamp01((m.delta - V6.PRIMER_DELTA_RAMP_LO) / (V6.PRIMER_DELTA_FULL - V6.PRIMER_DELTA_RAMP_LO));
+    const fBg = clamp01((m.bg - V6.PRIMER_BG_LO) / V6.PRIMER_BG_LO_SPAN) * clamp01((V6.PRIMER_BG_CEIL - m.bg) / V6.PRIMER_BG_FADE);
+    const fIob = m.maxIob > 0 ? clamp01(1 - m.iob / m.maxIob) : 0;
+    const fMl = clamp01(bud.mlScale);
+    const target = primerCap * fRise * fBg * fIob * fMl;
+    let amt = Math.min(target, Math.max(0, m.maxIob - m.iob));
     if (m.roundSmbTo > 0) amt = Math.floor(amt / m.roundSmbTo + 1e-9) * m.roundSmbTo;
-    if (amt > 0) { primerBolusU = amt; primerReason = `scale ${scale.toFixed(2)}× base ${primerCap.toFixed(2)}U`; }
-    else primerReason = 'no IOB headroom left after the base dose';
+    amt = Math.min(amt, target);
+    const why = `ceiling ${primerCap.toFixed(2)}U × rise ${fRise.toFixed(2)} × BG ${fBg.toFixed(2)} × IOB ${fIob.toFixed(2)} × ML ${fMl.toFixed(2)}`;
+    if (amt > 0) { primerBolusU = amt; primerReason = why; }
+    else primerReason = `sized to 0 (${why})`;
   }
   const doseWithPrimer = Math.min(gated.dose + primerBolusU, Math.max(0, m.maxIob - m.iob));
   return {
     primerBolusU, primerReason, doseBeforePrimer: gated.dose,
     state: st, prevState: prevState.state, score, scoreTerms: scoreRes.terms, renorm: scoreRes.renorm,
-    budget: bud.budget, mlScale: bud.mlScale, postEx: bud.postEx, sens: bud.sens,
+    budget: bud.budget, floorFrac: bud.floorFrac, mlScale: bud.mlScale, postEx: bud.postEx, sens: bud.sens,
     actionMult, rawDose, velFactor, velScaled, capped, stateCapped, confirmedCap, committedCap,
     prospectiveShot, confirmFloor, confirmDoseAdequate,
     finalDose: doseWithPrimer, hard: gated.hard, gates: gated.gates,
@@ -1720,7 +1761,11 @@ function v6Override(v6dec, v1WouldDose, opts) {
   }
   const inMealState = v6dec.state === 'CONFIRMED' || v6dec.state === 'COMMITTED';
   const inPostRescueWindow = opts.recentLowBg != null && opts.recentLowBg < 75;
-  let dose = (inMealState && !inPostRescueWindow) ? v6dec.finalDose : Math.min(v6dec.finalDose, v1WouldDose);
+  // A bolus primer is exempt from the non-meal cap; only the dose it was added to is held to V1's
+  // (OpenAPSBoostPlugin inMealState with primerBolusU > 0, DetermineBasalBoostV5.primerNonMealBound).
+  // The primer never fires in the post-rescue window, so V1 + primer is the bound there as well.
+  const primerU = v6dec.primerBolusU || 0;
+  let dose = (inMealState && !inPostRescueWindow) ? v6dec.finalDose : Math.min(v6dec.finalDose, v1WouldDose + primerU);
   const capped = dose < v6dec.finalDose - 1e-9;
   const postRescueCapped = capped && inMealState;
   const nonMealCapped = capped && !inMealState;
@@ -1750,13 +1795,17 @@ function v6Measurement(inp, r, opts) {
   // cumRise30 derived from shortAvgDelta × 6 (OpenAPSBoostV5Plugin.kt:356), clamped ≥ 0
   const cumRise30   = opts.cumRise30   != null ? opts.cumRise30   : Math.max(0, shortAvg * 6);
   const baseInsReq  = opts.baseInsulinReq != null ? opts.baseInsulinReq : r.insulinReqV1;
+  const v63 = isV63(inp);
   return {
     bg,
     delta,
     shortAvgDelta: shortAvg,
     deltaAccl: opts.deltaAccl != null ? opts.deltaAccl : r.delta_accl,
-    // maxDelta from the plugin = |delta| (OpenAPSBoostV5Plugin.kt:388)
-    maxDelta: opts.maxDelta != null ? opts.maxDelta : Math.abs(delta),
+    // maxDelta from the plugin: 6.2.0 |delta|; 6.3.0 max(|delta|, shortAvg, longAvg) (SafetyGates.kt v5MaxDelta)
+    maxDelta: opts.maxDelta != null ? opts.maxDelta
+      : v63 ? Math.max(Math.abs(delta), shortAvg, inp.longAvgDelta) : Math.abs(delta),
+    v63,
+    roundSmbTo: 0.05,   // pump bolus step, as the gates' rounding assumes
     // signed eventualBg − targetBg (MealHypothesis peak-tracks the raw offset)
     eventualBgOffset: opts.eventualBgOffset != null ? opts.eventualBgOffset : (eventualBG - inp.target),
     cumRise30,
@@ -1787,8 +1836,11 @@ function v6Knobs(inp) {
     aggression: inp.v6Aggression, hypoCaution: inp.v6HypoCaution, sensitivity: inp.v6Sensitivity,
     confirmedCap: inp.confirmedCap, committedCap: inp.committedCap,
     primerCapU: inp.primerCapU,
+    v63: isV63(inp),
   };
 }
+// Boost 6.3.0 (AAPS 4.0.0) rules apply unless the inputs ask for 6.2.0 (AAPS 3.4.2.6).
+function isV63(inp) { return inp.simVersion !== '6.2.0'; }
 
 function fmt(v, dp=1) {
   if (v == null || isNaN(v)) return '—';
@@ -2082,7 +2134,7 @@ const ENGINE = {
   V6, clamp01, clipNorm,
   v6MealScore, v6MealTimeOfDay, v6DeltaDeclining, v6MealStep, v6MlHypoScale, v6Budget,
   v6ActionMult, v6VelocityFactor, v6StateCap, v6Gates, v6Decide, v6FreshState, v6Override,
-  v6Measurement, v6Knobs,
+  v6Measurement, v6Knobs, isV63,
   fmt, calcAll, computeAggScore,
 };
 if (typeof module !== 'undefined' && module.exports) module.exports = ENGINE;
@@ -2100,7 +2152,9 @@ function getInputs() {
   const gbg = id => getBgSliderMgdl(id.replace(/^s-/, ''));
   const gb = id => g(id).checked;
   const gs = id => g(id).value;
+  const v63 = gs('s-simVersion') === '6.3.0';
   return {
+    simVersion:    gs('s-simVersion'),
     // Patient / insulin
     tdd:           gf('s-tdd'),
     profIsf:       gbg('s-profIsf'),
@@ -2127,10 +2181,12 @@ function getInputs() {
     maxIob:        gf('s-maxIob'),
     bolusMax:      gf('s-bolusMax'),
     insulinReqPct: gf('s-insulinReqPct') / 100,
-    smbMin:        gf('s-smbMin'),
-    uamSmbMin:     gf('s-uamSmbMin'),
-    percentScale:    gb('t-percentScale'),
-    percentScaleVal: gf('s-percentScale'),      // raw value (e.g. 200), matches Kotlin formula
+    // 6.3.0 lowers these to 15 and 20 (BoostV5AutoConfigApply.smbBasalMinutesCeilings)
+    smbMin:        v63 ? Math.min(15, gf('s-smbMin')) : gf('s-smbMin'),
+    uamSmbMin:     v63 ? Math.min(20, gf('s-uamSmbMin')) : gf('s-uamSmbMin'),
+    // 6.3.0 has no percent scale setting: the default, on at 200%, applies
+    percentScale:    v63 ? true : gb('t-percentScale'),
+    percentScaleVal: v63 ? 200 : gf('s-percentScale'),      // raw value (e.g. 200), matches Kotlin formula
     // Activity
     activityState: gs('s-activityState'),
     activityPct:   gf('s-activityPct'),
@@ -2197,6 +2253,21 @@ function update() {
   sl('activityPct','%'); sl('inactivityPct','%');
   sl('nightOffset',' '+dispUnit()); sl('cob',' g');
   sl('tempTargetBg',' '+dispUnit());
+  // Version-specific controls: 6.3.0 fixes percent scale and holds the SMB basal minutes.
+  const v63 = document.getElementById('s-simVersion').value === '6.3.0';
+  document.querySelectorAll('.v63-note').forEach(e => { e.style.display = v63 ? '' : 'none'; });
+  document.getElementById('t-percentScale').disabled = v63;
+  document.getElementById('s-percentScale').disabled = v63;
+  if (v63) {
+    document.getElementById('v-percentScale').textContent = '200% (fixed)';
+    [['smbMin', 15], ['uamSmbMin', 20]].forEach(([id, ceil]) => {
+      const v = parseFloat(document.getElementById('s-' + id).value);
+      if (v > ceil) document.getElementById('v-' + id).textContent = `${ceil} min (held from ${v})`;
+    });
+  }
+  document.querySelector('#note-primerCapU span').textContent = v63
+    ? `Opens on a short average rise of ${rateText(3)} or more, and not after a meal was committed.`
+    : 'Opens on acceleration above 10%.';
 
   const inp = getInputs();
   const r = calcAll(inp);
@@ -2466,6 +2537,11 @@ const V6_STATE_META = {
   COMMITTED:  { label: 'COMMITTED',  why: 'sustained dosing at baseline (1.0×, Committed cap per cycle)', color: '#a78bfa' },
   RECOVERING: { label: 'RECOVERING', why: 'backing off as IOB bites (0.4×, capped at V1 would-dose)', color: '#38bdf8' },
 };
+// Boost 6.3.0 descriptions where the rule changed.
+const V6_STATE_WHY_63 = {
+  COMMITTED:  () => `sustained dosing at baseline (1.0×, Committed cap per cycle). Backs off only once the rise is below ${rateText(3)}`,
+  RECOVERING: () => `backing off as IOB bites (0.4×, Committed cap, and capped at V1 would-dose). Returns to COMMITTED on a rise above ${rateText(8)}`,
+};
 
 // Render the Boost V6 tab: state machine, gates, dose breakdown + V1 reference line.
 function renderV6Tab(inp, r) {
@@ -2508,7 +2584,7 @@ function renderV6Tab(inp, r) {
   document.getElementById('out-v6-state-name').style.color = sm.color;
   document.getElementById('out-v6-state-name').textContent =
     `${sm.label}${v6.prevState !== v6.state ? ' (from ' + v6.prevState + ')' : ''}`;
-  document.getElementById('out-v6-state-why').textContent = sm.why;
+  document.getElementById('out-v6-state-why').textContent = (m.v63 && V6_STATE_WHY_63[v6.state]) ? V6_STATE_WHY_63[v6.state]() : sm.why;
   document.getElementById('out-v6-score').textContent = fmt(v6.score, 3);
   document.getElementById('out-v6-score').style.color = sm.color;
 
@@ -2540,14 +2616,14 @@ function renderV6Tab(inp, r) {
 
   // Breakdown
   let bd = `base insulinReq (from V1 ISF stack) = ${fmt(r.insulinReqV1,3)} U\n`;
-  bd += `budget = max(${V6.BUDGET_FLOOR}×base, base × mlHypo ${fmt(v6.mlScale,2)} × postEx ${fmt(v6.postEx,2)} × sens ${fmt(v6.sens,2)}) = ${fmt(v6.budget,3)} U\n`;
+  bd += `budget = max(${m.v63 && v6.floorFrac !== V6.BUDGET_FLOOR ? `${V6.BUDGET_FLOOR}/HypoCaution ${fmt(inp.v6HypoCaution,2)}` : V6.BUDGET_FLOOR}×base, base × mlHypo ${fmt(v6.mlScale,2)} × postEx ${fmt(v6.postEx,2)} × sens ${fmt(v6.sens,2)}) = ${fmt(v6.budget,3)} U\n`;
   bd += `dose = budget × multiplier(${v6.state}) ${fmt(v6.actionMult,2)} = ${fmt(v6.rawDose,3)} U\n`;
-  bd += `× velocity ${fmt(v6.velFactor,2)} (cumRise30 ${fmt(m.cumRise30,0)}) = ${fmt(v6.velScaled,3)} U → state-cap ${fmt(v6.capped,3)} U${v6.stateCapped ? ` (${v6.state} cap ${fmt(v6.state==='CONFIRMED'?inp.confirmedCap:inp.committedCap,2)}U bound)` : ''}\n`;
+  bd += `× velocity ${fmt(v6.velFactor,2)} (cumRise30 ${fmt(m.cumRise30,0)}) = ${fmt(v6.velScaled,3)} U → state-cap ${fmt(v6.capped,3)} U${v6.stateCapped ? ` (${v6.state === 'CONFIRMED' ? 'Confirmed' : 'Committed'} cap ${fmt(v6.state==='CONFIRMED'?inp.confirmedCap:inp.committedCap,2)}U bound)` : ''}\n`;
   // The primer is applied after the dose is finalised, so it is reported after the cap line
   // rather than folded into it, exactly as the engine applies it.
   bd += v6.primerBolusU > 0
-    ? `+ acceleration primer ${fmt(v6.primerBolusU,3)} U (${v6.primerReason}) = ${fmt(v6.finalDose,3)} U; base is additive, any excess is netted off the commit-shot\n`
-    : `acceleration primer: none — ${v6.primerReason}\n`;
+    ? `+ early primer ${fmt(v6.primerBolusU,3)} U (${v6.primerReason}) = ${fmt(v6.finalDose,3)} U\n`
+    : `early primer: none, ${v6.primerReason}\n`;
   if (v6.hard) bd += `HARD GATE: ${v6.hard} → 0 U\n`;
   else bd += `gates: ${v6.gates.length ? v6.gates.join(', ') : 'none'} → engine dose ${fmt(v6.finalDose,2)} U${v6.spikeCapped ? ' (spike-capped)' : ''}\n`;
   if (ov.mode === 'sleep' || ov.mode === 'boost-inactive' || ov.mode === 'cum-cap') bd += `override site: ${ov.note}`;
