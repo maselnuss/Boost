@@ -76,8 +76,9 @@ your own data. That is optional now, not a required warm-up.
 ### Building it in your browser
 
 If you build the app with GitHub Actions in your own fork (the AndroidAPS browser build), run the
-Branch CI workflow, with "Use workflow from" set to the branch you want: `dev` for this line
-(`master` is the other). Do not use the AAPS CI workflow. It fetches a release tag from the
+Branch CI workflow, with "Use workflow from" set to the branch you want: `dev-3.4.2.6` for this
+line (`master-3.4.2.6` holds the earlier 6.1.2). Boost for AAPS 4.0.0 is on `master` and `dev`, built
+with the Boost CI workflow. Do not use the AAPS CI workflow. It fetches a release tag from the
 upstream nightscout/AndroidAPS repository and builds that, so the app it produces is standard
 AndroidAPS without Boost.
 
