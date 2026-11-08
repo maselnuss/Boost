@@ -16,7 +16,7 @@ object Versions {
 
     // Boost version, uploaded to Nightscout as apsConfiguration.boostVersion with the branch and
     // short hash appended at build time.
-    const val boostVersion = "6.3.1.E"
+    const val boostVersion = "6.3.2.E"
 
     val javaVersion = JavaVersion.VERSION_21
     val jvmTarget = JvmTarget.JVM_21
